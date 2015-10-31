@@ -7,7 +7,6 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 
 import edu.rit.gpu.Gpu;
-import edu.rit.gpu.GpuDoubleArray;
 import edu.rit.gpu.GpuStructArray;
 import edu.rit.gpu.Kernel;
 import edu.rit.gpu.Module;
@@ -17,6 +16,39 @@ import edu.rit.pj2.Task;
 
 public class MetricCenterGpu extends Task {
 	
+	// Struct for holding the result
+	private static class Result extends Struct
+	{
+		double distance;
+		int pointIndex;
+		
+		public Result(double distance, int pointIndex)
+		{
+			this.distance = distance;
+			this.pointIndex = pointIndex;
+		}
+		
+		public static long sizeof()
+		{
+			return 16;
+		}
+
+		@Override
+		public void toStruct(ByteBuffer buf) {
+			buf.putDouble(distance);
+			buf.putInt(pointIndex);
+			
+		}
+
+		@Override
+		public void fromStruct(ByteBuffer buf) {
+			distance = buf.getDouble();
+			pointIndex = buf.getInt();
+		}
+		
+	}
+	
+	// Struct for holding the points
 	private static class Point extends Struct
 	{
 		public double x;
@@ -57,7 +89,7 @@ public class MetricCenterGpu extends Task {
 	double[] yPoints;
 	int n;
 	GpuStructArray<Point> allPoints;
-	GpuDoubleArray result;
+	GpuStructArray<Result> result;
 	
 	
 	/*
@@ -124,7 +156,7 @@ public class MetricCenterGpu extends Task {
 		Module module = gpu.getModule("MetricCenterGpu.cubin");
 		
 		allPoints = gpu.getStructArray(Point.class, n);
-		result = module.getDoubleArray("devResult", noOfBlocks);
+		result = module.getStructArray("devResult", Result.class, noOfBlocks);
 		
 		for(int i = 0; i < n; ++i)
 		{
@@ -142,7 +174,7 @@ public class MetricCenterGpu extends Task {
 		
 		for(int i = 0; i < noOfBlocks; ++i)
 		{
-			result.item[i] = -100.00;
+			result.item[i] =  new Result(-100.00, -1);
 		}
 		
 		// Copy result array from CPU to GPU
@@ -157,7 +189,7 @@ public class MetricCenterGpu extends Task {
 		// Print results
 		for(int i = 0; i < noOfBlocks; ++i)
 		{
-			System.out.println("Result is: " + result.item[i]);
+			System.out.println("Result is: " + allPoints.item[result.item[i].pointIndex].x + " " + allPoints.item[result.item[i].pointIndex].y + " " + result.item[i].distance);
 		}
 	}
 	
