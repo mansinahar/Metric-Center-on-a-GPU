@@ -1,11 +1,19 @@
 #include <stdio.h>
 #define NT 256
 
-__device__ double devResult[2];
+__device__ double devResult[3];
+
+typedef struct
+{
+	double x;
+	double y;
+}
+point;
+
 
 __shared__ double shrResult [NT];
 
-extern "C" __global__ void metricCenter(double *xPts, double *yPts, int n)
+extern "C" __global__ void metricCenter(point *pts, int n)
 {
 	int thr,size;
 	double thrResult, tempResult;
@@ -18,7 +26,7 @@ extern "C" __global__ void metricCenter(double *xPts, double *yPts, int n)
 	// Calculate the distance from this block's points to one of the other points.
 	for(unsigned long long int i = thr; i < n; i += size)
 	{
-		tempResult = sqrt(((xPts[blockIdx.x] - xPts[i]) * (xPts[blockIdx.x] - xPts[i])) + ((yPts[blockIdx.x] - yPts[i]) * (yPts[blockIdx.x] - yPts[i])));
+		tempResult = sqrt(((pts[blockIdx.x].x - pts[i].x) * (pts[blockIdx.x].x - pts[i].x)) + ((pts[blockIdx.x].y - pts[i].y) * (pts[blockIdx.x].y - pts[i].y)));
 		// Keep only the point whose distance is maximum from this block's point
 		if(tempResult > thrResult)
 		{
