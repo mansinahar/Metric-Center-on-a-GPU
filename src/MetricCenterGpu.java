@@ -1,3 +1,11 @@
+/*
+ * File: MetricCenterGpu.java
+ * Package: ---
+ * @author MansiNahar
+ * @version 1.2
+ *  
+ *  Given a set of points, this program finds the metric center of those points.
+ */
 import java.io.BufferedReader;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -13,33 +21,59 @@ import edu.rit.gpu.Module;
 import edu.rit.gpu.Struct;
 import edu.rit.pj2.Task;
 
-
+/*
+ * This class the sets up the GPU and calls the kernel function
+ * to calculate the metric center of the given points
+ */
 public class MetricCenterGpu extends Task {
 	
-	// Struct for holding the result
+	// Structure for holding the result of a metric center
 	private static class Result extends Struct
 	{
 		double distance;
 		int pointIndex;
 		
+		/*
+		 * Constructor to set the distance and pointIndex of the result
+		 * @param distance
+		 * 		Maximum radius needed to draw a circle
+		 * 		from this point that encloses all the given points.
+		 * @param pointIndex
+		 * 		The point whose maximum radius is calculated such that
+		 * 		the radius encloses all the given points.
+		 */
 		public Result(double distance, int pointIndex)
 		{
 			this.distance = distance;
 			this.pointIndex = pointIndex;
 		}
 		
+		/*
+		 * Returns the size in bytes of the corresponding C struct.
+		 * @return long
+		 * 			Size in bytes of the struct.
+		 */
 		public static long sizeof()
 		{
 			return 16;
 		}
 
-		@Override
+		/*
+		 * Write this Result object to the given byte buffer as a C struct.
+		 * @param buf
+		 * 			The buffer to which object needs to be written.
+		 */
 		public void toStruct(ByteBuffer buf) {
 			buf.putDouble(distance);
 			buf.putInt(pointIndex);
 			
 		}
 
+		/*
+		 * Read the C struct from the given byte buffer as a Result object.
+		 * @param buf
+		 * 			The buffer from which object needs to be read.
+		 */
 		@Override
 		public void fromStruct(ByteBuffer buf) {
 			distance = buf.getDouble();
@@ -48,30 +82,50 @@ public class MetricCenterGpu extends Task {
 		
 	}
 	
-	// Struct for holding the points
+	// Structure for holding the 2D points
 	private static class Point extends Struct
 	{
 		public double x;
 		public double y;
 		
+		/*
+		 * Constructor the set the x and y coordinates of the point.
+		 * @param x
+		 * 		X coordinate of the point
+		 * @param y
+		 * 		Y coordinate of the point
+		 */
 		public Point(double x, double y)
 		{
 			this.x = x;
 			this.y = y;
 		}
 		
+		/*
+		 * Returns the size in bytes of the corresponding C struct.
+		 * @return long
+		 * 			Size in bytes of the struct.
+		 */
 		public static long sizeof()
 		{
 			return 16;
 		}
 
-		@Override
+		/*
+		 * Write this Result object to the given byte buffer as a C struct.
+		 * @param buf
+		 * 			The buffer to which object needs to be written.
+		 */
 		public void toStruct(ByteBuffer buf) {
 			buf.putDouble(x);
 			buf.putDouble(y);
 		}
 
-		@Override
+		/*
+		 * Read the C struct from the given byte buffer as a Result object.
+		 * @param buf
+		 * 			The buffer from which object needs to be read.
+		 */
 		public void fromStruct(ByteBuffer buf) {
 			x = buf.getDouble();
 			y = buf.getDouble();
@@ -80,8 +134,18 @@ public class MetricCenterGpu extends Task {
 		
 	}
 	
-	// Interface for the kernel
+	/*
+	 * Interface for the kernel function that calculates the metric center
+	 */
 	private static interface MetricCenterKernel extends Kernel {
+		
+		/*
+		 * Function to calculate the metric center
+		 * @param allPoints
+		 * 		A GpuStructArray of Point consisting of all 2D points.
+		 * @param n
+		 * 		Number of 2D points.
+		 */
 		public void metricCenter(GpuStructArray<Point> allPoints, int n);
 	}
 
@@ -130,9 +194,13 @@ public class MetricCenterGpu extends Task {
 		
 	}
 	
-	
-	
-	
+	/*
+	 * Main function - reading all the points and calculating the metric center
+	 * @param args
+	 * 		File name from which points need to be read
+	 * @exception Exception
+	 * 		Throws general exception, if occurred.
+	 */
 	public void main(String args[]) throws Exception {
 		
 		// Read all points from the array
@@ -164,7 +232,7 @@ public class MetricCenterGpu extends Task {
 		MetricCenterKernel kernel = module.getKernel(MetricCenterKernel.class);
 		
 		// Setup the GPU grid
-		kernel.setBlockDim (256);
+		kernel.setBlockDim (1024);
 		kernel.setGridDim (gpu.getMultiprocessorCount());
 		
 		// Copy array of points from CPU to GPU
@@ -200,11 +268,21 @@ public class MetricCenterGpu extends Task {
 		System.out.println();
 	}
 	
+	/*
+	 * Specifies the number of GPUs required by this program
+	 * @return int
+	 * 		Integer specifying the number of GPUs required.
+	 */
 	protected static int gpusRequired()
 	{
 		return 1;
 	}
 	
+	/*
+	 * Specifies the number of cores required by this program
+	 * @return int
+	 * 		Integer specifying the number of cores required.
+	 */
 	protected static int coresRequired()
 	{
 		return 1;
