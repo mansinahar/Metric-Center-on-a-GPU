@@ -87,9 +87,6 @@ public class MetricCenterGpu extends Task {
 
 	double[] xPoints;
 	double[] yPoints;
-	int n;
-	GpuStructArray<Point> allPoints;
-	GpuStructArray<Result> result;
 	
 	
 	/*
@@ -121,11 +118,10 @@ public class MetricCenterGpu extends Task {
 		
 		
 		// Copy points from array lists to arrays
-		n = allXPoints.size();
-		xPoints = new double[n];
-		yPoints = new double[n];
+		xPoints = new double[allXPoints.size()];
+		yPoints = new double[allXPoints.size()];
 		
-		for(int i = 0; i < n; ++i)
+		for(int i = 0; i < allXPoints.size(); ++i)
 		{
 			xPoints[i] = allXPoints.get(i);
 			yPoints[i] = allYPoints.get(i);
@@ -141,12 +137,13 @@ public class MetricCenterGpu extends Task {
 		
 		// Read all points from the array
 		readFile(args[0]);
-	
-		int noOfBlocks = 3;
 		
-		for(int i = 0; i < xPoints.length; ++i) {
-			System.out.println(xPoints[i] + " " + yPoints[i]);
-		}
+		int n;
+		GpuStructArray<Point> allPoints;
+		GpuStructArray<Result> result;
+		Result finalResult = new Result(-100.00, -1);
+		
+		n = xPoints.length;
 		
 		// Get GPU object
 		Gpu gpu = Gpu.gpu();
@@ -156,7 +153,7 @@ public class MetricCenterGpu extends Task {
 		Module module = gpu.getModule("MetricCenterGpu.cubin");
 		
 		allPoints = gpu.getStructArray(Point.class, n);
-		result = module.getStructArray("devResult", Result.class, noOfBlocks);
+		result = module.getStructArray("devResult", Result.class, gpu.getMultiprocessorCount());
 		
 		for(int i = 0; i < n; ++i)
 		{
@@ -165,14 +162,15 @@ public class MetricCenterGpu extends Task {
 		
 		// Get the kernel
 		MetricCenterKernel kernel = module.getKernel(MetricCenterKernel.class);
+		
 		// Setup the GPU grid
 		kernel.setBlockDim (256);
-		kernel.setGridDim (noOfBlocks);
+		kernel.setGridDim (gpu.getMultiprocessorCount());
 		
 		// Copy array of points from CPU to GPU
 		allPoints.hostToDev();
 		
-		for(int i = 0; i < noOfBlocks; ++i)
+		for(int i = 0; i < gpu.getMultiprocessorCount(); ++i)
 		{
 			result.item[i] =  new Result(-100.00, -1);
 		}
@@ -187,10 +185,19 @@ public class MetricCenterGpu extends Task {
 		result.devToHost();
 		
 		// Print results
-		for(int i = 0; i < noOfBlocks; ++i)
+		for(int i = 0; i < gpu.getMultiprocessorCount(); ++i)
 		{
-			System.out.println("Result is: " + allPoints.item[result.item[i].pointIndex].x + " " + allPoints.item[result.item[i].pointIndex].y + " " + result.item[i].distance);
+			if((finalResult.distance == -100.00 && finalResult.pointIndex == -1) || finalResult.distance > result.item[i].distance)
+			{
+				finalResult.distance = result.item[i].distance;
+				finalResult.pointIndex = result.item[i].pointIndex;
+			}
 		}
+		
+		System.out.printf(finalResult.pointIndex + " (" + "%.5g" + "," + "%.5g" + ")", allPoints.item[finalResult.pointIndex].x, allPoints.item[finalResult.pointIndex].y);
+		System.out.println();
+		System.out.printf("%.5g", finalResult.distance);
+		System.out.println();
 	}
 	
 	protected static int gpusRequired()
