@@ -66,7 +66,6 @@ public class MetricCenterGpu extends Task {
 		public void toStruct(ByteBuffer buf) {
 			buf.putDouble(distance);
 			buf.putInt(pointIndex);
-			
 		}
 
 		/*
@@ -129,9 +128,7 @@ public class MetricCenterGpu extends Task {
 		public void fromStruct(ByteBuffer buf) {
 			x = buf.getDouble();
 			y = buf.getDouble();
-			
 		}
-		
 	}
 	
 	/*
@@ -146,7 +143,7 @@ public class MetricCenterGpu extends Task {
 		 * @param n
 		 * 		Number of 2D points.
 		 */
-		public void metricCenter(GpuStructArray<Point> allPoints, int n);
+		public void metricCenter(GpuStructArray<Point> allPoints, GpuStructArray<Result> devResult, int n);
 	}
 
 	double[] xPoints;
@@ -177,7 +174,6 @@ public class MetricCenterGpu extends Task {
 				allXPoints.add(xPoint);
 				allYPoints.add(yPoint);
 			}
-			
 		}
 		
 		
@@ -190,8 +186,6 @@ public class MetricCenterGpu extends Task {
 			xPoints[i] = allXPoints.get(i);
 			yPoints[i] = allYPoints.get(i);
 		}
-		
-		
 	}
 	
 	/*
@@ -200,6 +194,8 @@ public class MetricCenterGpu extends Task {
 	 * 			GpuStructArray of results of each block of the GPU.
 	 * @param n
 	 * 			Length of the result array.
+	 * @return Result
+	 * 			The final result after reduction
 	 */
 	public Result reduceResult(GpuStructArray<Result> result, int n)
 	{
@@ -251,6 +247,16 @@ public class MetricCenterGpu extends Task {
 	}
 	
 	/*
+	 * This function prints the usage of this program
+	 */
+	public void usage() {
+		System.out.println("Usage:");
+		System.out.println("java pj2 MetricCenterGpu <file>");
+		System.out.println("file = Text file from which points need to be read.");
+		throw new IllegalArgumentException();
+	}
+	
+	/*
 	 * Main function - reading all the points and calculating the metric center
 	 * @param args
 	 * 		File name from which points need to be read
@@ -259,8 +265,19 @@ public class MetricCenterGpu extends Task {
 	 */
 	public void main(String args[]) throws Exception {
 		
-		// Read all points from the array
-		readFile(args[0]);
+		String fileName="";
+		
+		// Check for the file name argument. If no such argument exists
+		// or more than one argument exists then print usage.
+		if(args.length != 1) {
+			usage();
+		}
+		else {
+			fileName = args[0];
+		}
+		
+		// Read all points from the file
+		readFile(fileName);
 		
 		int n;
 		GpuStructArray<Point> allPoints;
@@ -277,7 +294,7 @@ public class MetricCenterGpu extends Task {
 		Module module = gpu.getModule("MetricCenterGpu.cubin");
 		
 		allPoints = gpu.getStructArray(Point.class, n);
-		result = module.getStructArray("devResult", Result.class, gpu.getMultiprocessorCount());
+		result = gpu.getStructArray(Result.class, gpu.getMultiprocessorCount());
 		
 		for(int i = 0; i < n; ++i)
 		{
@@ -303,12 +320,12 @@ public class MetricCenterGpu extends Task {
 		result.hostToDev();
 		
 		// execute the kernel function
-		kernel.metricCenter(allPoints, n);
+		kernel.metricCenter(allPoints, result, n);
 		
 		// Copy results back to the CPU from GPU
 		result.devToHost();
 		
-		// Print results
+		// Reduce result and print it
 		finalResult = reduceResult(result, result.length());
 		printResult(finalResult, allPoints);
 		

@@ -1,8 +1,9 @@
 #include <stdio.h>
+
 // Number of threads
 #define NT 1024
 
-// Structire to hold the 2D Points
+// Structure to hold the 2D Points
 typedef struct
 {
 	double x;
@@ -41,14 +42,22 @@ __device__ void assignResult(result *a, result *b)
 	a->distance = b->distance;
 }
 
-// Array holding the results of each block
-__device__ result devResult[14];
+// Function to reduce the block's result
+__device__ void reduceBlockResult(result *blockResult, result *newResult)
+{
+	// Store this block's result in the devResult array at this block's index only if the new result
+	// is better than the old result of this block.
+	if((blockResult->distance == -100.00 && blockResult->pointIndex == -1) || (compareDistance(blockResult->distance, newResult->distance) == 1))
+			{
+				assignResult(blockResult, newResult);	
+			}
+}
 
 // Array holding the result of each thread in a block
 __shared__ result shrResult [NT];
 
 // Kernel function to calculate the metric center
-extern "C" __global__ void metricCenter(point *pts, int n)
+extern "C" __global__ void metricCenter(point *pts, result *devResult, int n)
 {
 	int thr, size, block, noOfBlocks;
 	result thrResult, tempResult;
@@ -91,14 +100,9 @@ extern "C" __global__ void metricCenter(point *pts, int n)
 		}
 
 		// If this is the 1st thread of the block, it will now have the reduced result of this block.
-		// Store this block's result in the devResult array at this block's index only if the new result
-		// is better than the old result of this block.
 		if (thr == 0)
 		{
-			if((devResult[blockIdx.x].distance == -100.00 && devResult[blockIdx.x].pointIndex == -1) || (compareDistance(devResult[blockIdx.x].distance, shrResult[0].distance) == 1))
-			{
-				assignResult(&devResult[blockIdx.x], &shrResult[0]);	
-			}
+			reduceBlockResult(&devResult[blockIdx.x], &shrResult[0]);
 		}	
 	}
 }
