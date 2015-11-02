@@ -195,6 +195,62 @@ public class MetricCenterGpu extends Task {
 	}
 	
 	/*
+	 * Reduces the GPU result
+	 * @param result
+	 * 			GpuStructArray of results of each block of the GPU.
+	 * @param n
+	 * 			Length of the result array.
+	 */
+	public Result reduceResult(GpuStructArray<Result> result, int n)
+	{
+		Result finalResult = new Result(-100.00, -1);
+		for(int i = 0; i < n; ++i)
+		{
+			if((finalResult.distance == -100.00 && finalResult.pointIndex == -1) || finalResult.distance > result.item[i].distance)
+			{
+				finalResult.distance = result.item[i].distance;
+				finalResult.pointIndex = result.item[i].pointIndex;
+			}
+		}
+		return finalResult;
+	}
+	
+	/*
+	 * Prints the Result object
+	 * @param finalResult
+	 * 		Result object that needs to be printed
+	 * @param allPoints
+	 * 		GpuStructArray of all points
+	 */
+	public void printResult(Result finalResult, GpuStructArray<Point> allPoints)
+	{
+		System.out.printf(finalResult.pointIndex + " (" + "%.5g" + "," + "%.5g" + ")", allPoints.item[finalResult.pointIndex].x, allPoints.item[finalResult.pointIndex].y);
+		System.out.println();
+		System.out.printf("%.5g", finalResult.distance);
+		System.out.println();
+	}
+	
+	/*
+	 * Specifies the number of GPUs required by this program
+	 * @return int
+	 * 		Integer specifying the number of GPUs required.
+	 */
+	protected static int gpusRequired()
+	{
+		return 1;
+	}
+	
+	/*
+	 * Specifies the number of cores required by this program
+	 * @return int
+	 * 		Integer specifying the number of cores required.
+	 */
+	protected static int coresRequired()
+	{
+		return 1;
+	}
+	
+	/*
 	 * Main function - reading all the points and calculating the metric center
 	 * @param args
 	 * 		File name from which points need to be read
@@ -238,7 +294,7 @@ public class MetricCenterGpu extends Task {
 		// Copy array of points from CPU to GPU
 		allPoints.hostToDev();
 		
-		for(int i = 0; i < gpu.getMultiprocessorCount(); ++i)
+		for(int i = 0; i < result.length(); ++i)
 		{
 			result.item[i] =  new Result(-100.00, -1);
 		}
@@ -253,39 +309,9 @@ public class MetricCenterGpu extends Task {
 		result.devToHost();
 		
 		// Print results
-		for(int i = 0; i < gpu.getMultiprocessorCount(); ++i)
-		{
-			if((finalResult.distance == -100.00 && finalResult.pointIndex == -1) || finalResult.distance > result.item[i].distance)
-			{
-				finalResult.distance = result.item[i].distance;
-				finalResult.pointIndex = result.item[i].pointIndex;
-			}
-		}
+		finalResult = reduceResult(result, result.length());
+		printResult(finalResult, allPoints);
 		
-		System.out.printf(finalResult.pointIndex + " (" + "%.5g" + "," + "%.5g" + ")", allPoints.item[finalResult.pointIndex].x, allPoints.item[finalResult.pointIndex].y);
-		System.out.println();
-		System.out.printf("%.5g", finalResult.distance);
-		System.out.println();
-	}
-	
-	/*
-	 * Specifies the number of GPUs required by this program
-	 * @return int
-	 * 		Integer specifying the number of GPUs required.
-	 */
-	protected static int gpusRequired()
-	{
-		return 1;
-	}
-	
-	/*
-	 * Specifies the number of cores required by this program
-	 * @return int
-	 * 		Integer specifying the number of cores required.
-	 */
-	protected static int coresRequired()
-	{
-		return 1;
 	}
 	
 }

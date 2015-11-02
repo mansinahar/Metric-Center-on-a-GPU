@@ -18,6 +18,29 @@ typedef struct
 }
 result;
 
+// Function to calculate distance between two points
+__device__ double pointDistance(point *aPoint, point *bPoint)
+{
+	double distance;
+	distance = sqrt(((aPoint->x - bPoint->x) * (aPoint->x - bPoint->x)) + ((aPoint->y - bPoint->y) * (aPoint->y - bPoint->y)));
+	return distance;
+}
+
+// Compare two distances
+__device__ int compareDistance(double a, double b)
+{
+	if(a < b) return -1;
+	if(a > b) return 1;
+	return 0;
+}
+
+// Assign the values of one result struct to another result struct
+__device__ void assignResult(result *a, result *b)
+{
+	a->pointIndex = b->pointIndex;
+	a->distance = b->distance;
+}
+
 // Array holding the results of each block
 __device__ result devResult[14];
 
@@ -36,23 +59,22 @@ extern "C" __global__ void metricCenter(point *pts, int n)
 	size = NT;
 
 	// Calculate the distance from this block's points to one of the other points.
-	for(unsigned long long int i = block; i < n; i += noOfBlocks)
+	for(int i = block; i < n; i += noOfBlocks)
 	{
 		thrResult.distance = -1.0;
-		for(unsigned long long int j = thr; j < n; j += size)
+		for(int j = thr; j < n; j += size)
 		{
-			tempResult.distance = sqrt(((pts[i].x - pts[j].x) * (pts[i].x - pts[j].x)) + ((pts[i].y - pts[j].y) * (pts[i].y - pts[j].y)));
+			tempResult.distance = pointDistance(&pts[i], &pts[j]);
 			
 			// Keep only the point whose distance is maximum from this block's point
-			if(tempResult.distance > thrResult.distance)
+			if(compareDistance(tempResult.distance, thrResult.distance) == 1)
 			{
-				thrResult.distance = tempResult.distance;
-				thrResult.pointIndex = i;
+				tempResult.pointIndex = i;
+				assignResult(&thrResult, &tempResult);
 			}
 		}
 		
-		shrResult[thr].distance = thrResult.distance;
-		shrResult[thr].pointIndex = thrResult.pointIndex;
+		assignResult(&shrResult[thr], &thrResult);
 
 		// Reduce the results of all threads in this block
 		__syncthreads();
@@ -60,10 +82,9 @@ extern "C" __global__ void metricCenter(point *pts, int n)
 		{
 			if(thr < m)
 			{
-				if(shrResult[thr].distance < shrResult[thr+m].distance)
+				if(compareDistance(shrResult[thr].distance, shrResult[thr+m].distance) == -1)
 				{
-					shrResult[thr].distance = shrResult[thr+m].distance;
-					shrResult[thr].pointIndex = shrResult[thr+m].pointIndex;
+					assignResult(&shrResult[thr], &shrResult[thr+m]);
 				}	
 			}
 			__syncthreads();
@@ -74,10 +95,9 @@ extern "C" __global__ void metricCenter(point *pts, int n)
 		// is better than the old result of this block.
 		if (thr == 0)
 		{
-			if((devResult[blockIdx.x].distance == -100.00 && devResult[blockIdx.x].pointIndex == -1) || (devResult[blockIdx.x].distance > shrResult[0].distance))
+			if((devResult[blockIdx.x].distance == -100.00 && devResult[blockIdx.x].pointIndex == -1) || (compareDistance(devResult[blockIdx.x].distance, shrResult[0].distance) == 1))
 			{
-				devResult[blockIdx.x].distance = shrResult[0].distance;
-				devResult[blockIdx.x].pointIndex = shrResult[0].pointIndex;	
+				assignResult(&devResult[blockIdx.x], &shrResult[0]);	
 			}
 		}	
 	}
